@@ -1,0 +1,202 @@
+<Window x:Class="ModBuilderBW.Windows.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="clr-namespace:ModBuilderBW.Windows.Models"
+        mc:Ignorable="d"
+        Title="Mod Builder BW"
+        Width="1320"
+        Height="900"
+        MinWidth="1080"
+        MinHeight="760">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="230" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="460" />
+            <ColumnDefinition Width="20" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Row="0" Grid.Column="0">
+            <DockPanel Margin="0,0,0,12">
+                <TextBlock Text="Mods" FontSize="24" FontWeight="SemiBold" DockPanel.Dock="Left" />
+                <TextBlock Text="{Binding SourceCountText}" Foreground="#666" VerticalAlignment="Center" DockPanel.Dock="Right" />
+            </DockPanel>
+
+            <Border BorderBrush="#707070" BorderThickness="1.5" CornerRadius="12" Padding="18" Background="#0A000000"
+                    AllowDrop="True" Drop="DropZone_OnDrop" DragOver="DropZone_OnDragOver">
+                <StackPanel>
+                    <TextBlock Text="Drop mods here" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                    <TextBlock Text="Files or folders" Foreground="#666" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <ListBox x:Name="SourcesListBox"
+                     ItemsSource="{Binding Sources}"
+                     Margin="0,12,0,12"
+                     SelectionMode="Extended"
+                     MinHeight="420"
+                     DisplayMemberPath="DisplayLine"
+                     HorizontalContentAlignment="Stretch" />
+
+            <WrapPanel Margin="0,0,0,8">
+                <Button Content="Add Files" Click="AddFiles_OnClick" Margin="0,0,8,8" Padding="14,6" />
+                <Button Content="Add Folder" Click="AddFolder_OnClick" Margin="0,0,8,8" Padding="14,6" />
+                <Button Content="Exclude Selected" Click="ExcludeSelected_OnClick" Margin="0,0,8,8" Padding="14,6" />
+                <Button Content="Include Selected" Click="IncludeSelected_OnClick" Margin="0,0,8,8" Padding="14,6" />
+                <Button Content="Remove" Click="RemoveSelected_OnClick" Margin="0,0,8,8" Padding="14,6" />
+                <Button Content="Clear" Click="Clear_OnClick" Margin="0,0,8,8" Padding="14,6" />
+            </WrapPanel>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="0" Grid.Column="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,16">
+                    <StackPanel DockPanel.Dock="Left">
+                        <TextBlock Text="Build Settings" FontSize="24" FontWeight="SemiBold" />
+                        <TextBlock Text="Configure the mod pack installer and output." Foreground="#666" />
+                    </StackPanel>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <ProgressBar Width="120" Height="6" IsIndeterminate="True" Visibility="{Binding IsBuilding, Converter={StaticResource BoolToVisibility}}" Margin="0,0,12,0" />
+                        <Button Content="Build Mods" Click="BuildMods_OnClick" Padding="18,8" FontWeight="SemiBold" />
+                    </StackPanel>
+                </DockPanel>
+
+                <GroupBox Header="Target" Margin="0,0,0,16" Padding="12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="220" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Region" Margin="0,0,12,12" VerticalAlignment="Center" />
+                        <ComboBox Grid.Row="0" Grid.Column="1" SelectedValue="{Binding Region}" SelectedValuePath="Tag" Margin="0,0,0,12">
+                            <ComboBoxItem Content="EU" Tag="{x:Static models:Region.EU}" />
+                            <ComboBoxItem Content="NA" Tag="{x:Static models:Region.NA}" />
+                            <ComboBoxItem Content="RU" Tag="{x:Static models:Region.RU}" />
+                            <ComboBoxItem Content="CUSTOM" Tag="{x:Static models:Region.CUSTOM}" />
+                            <ComboBoxItem Content="Auto Detection" Tag="{x:Static models:Region.NONE}" />
+                        </ComboBox>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Game root / install folder" Margin="0,0,12,12" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding GameRoot, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,12" />
+                        <Button Grid.Row="1" Grid.Column="2" Content="Browse" Click="BrowseGameRoot_OnClick" Margin="0,0,0,12" Padding="14,6" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Mods folder" Margin="0,0,12,12" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ModsFolderName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Version folder" Margin="0,0,12,12" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding VersionFolder, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Recommended install path" Margin="0,0,12,0" VerticalAlignment="Top" />
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding RecommendedInstallPath}" TextWrapping="Wrap" FontFamily="Consolas" />
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="Installer" Margin="0,0,0,16" Padding="12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="220" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Installer file name" Margin="0,0,12,12" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding InstallerName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Setup window title" Margin="0,0,12,12" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SetupWindowTitle, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Installer icon" Margin="0,0,12,12" VerticalAlignment="Top" />
+                        <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Vertical" Margin="0,0,12,12">
+                            <TextBlock Text="{Binding InstallerIconPath}" FontFamily="Consolas" TextWrapping="Wrap" />
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button Content="Browse" Click="BrowseInstallerIcon_OnClick" Margin="0,0,8,0" Padding="14,6" />
+                                <Button Content="Clear" Click="ClearInstallerIcon_OnClick" Padding="14,6" />
+                            </StackPanel>
+                        </StackPanel>
+                        <Border Grid.Row="2" Grid.Column="2" Width="70" Height="70" Background="#0A000000" CornerRadius="10" Padding="6" Margin="0,0,0,12">
+                            <Image Source="{Binding InstallerIconPreview}" Stretch="Uniform" />
+                        </Border>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Installer EXE preview" Margin="0,0,12,12" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PreviewInstallerFileName}" FontFamily="Consolas" Margin="0,0,0,12" />
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Setup title preview" Margin="0,0,12,12" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding PreviewSetupWindowTitle}" Margin="0,0,0,12" />
+
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Export" Margin="0,0,12,12" VerticalAlignment="Top" />
+                        <StackPanel Grid.Row="5" Grid.Column="1" Margin="0,0,0,12">
+                            <CheckBox Content="Create ZIP package" IsChecked="{Binding CreateZip}" Margin="0,0,0,8" />
+                            <CheckBox Content="Export Windows EXE installer" IsChecked="{Binding CreateInstallerExe}" />
+                        </StackPanel>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="Output" Padding="12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="220" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Output directory" Margin="0,0,12,12" VerticalAlignment="Top" />
+                        <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,12,12">
+                            <TextBlock Text="{Binding OutputDirectory}" FontFamily="Consolas" TextWrapping="Wrap" />
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button Content="Browse" Click="BrowseOutput_OnClick" Margin="0,0,8,0" Padding="14,6" />
+                                <Button Content="Reveal" Click="RevealOutput_OnClick" Padding="14,6" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Last build folder" Margin="0,0,12,12" VerticalAlignment="Top" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding LastBuildResult.BuildFolder}" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,0,0,12" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Last ZIP" Margin="0,0,12,12" VerticalAlignment="Top" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LastBuildResult.ZipPath}" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,0,0,12" />
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Last EXE" Margin="0,0,12,0" VerticalAlignment="Top" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding LastBuildResult.InstallerExePath}" FontFamily="Consolas" TextWrapping="Wrap" />
+                    </Grid>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
+
+        <GroupBox Grid.Row="1" Grid.ColumnSpan="3" Header="Log" Padding="10">
+            <TextBox Text="{Binding LogText}"
+                     IsReadOnly="True"
+                     AcceptsReturn="True"
+                     VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Auto"
+                     FontFamily="Consolas" />
+        </GroupBox>
+    </Grid>
+</Window>

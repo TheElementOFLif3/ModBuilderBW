@@ -1,0 +1,16 @@
+{
+  "sources": [
+    "/Users/amarkovic/Desktop/XMods/api/me.poliroid.modslistapi_1.7.7.wotmod",
+    "/Users/amarkovic/Desktop/XMods/XmarksOnGun/XmarksOnGun.wotmod"
+  ],
+  "outputDirectory": "/Users/amarkovic/Desktop/Mod Builder",
+  "region": "EU",
+  "gameRoot": "C:/Games/World_of_Tanks_EU",
+  "modsFolderName": "mods",
+  "versionFolder": "2.2.0.2",
+  "installerName": "BlackWot Pack EU 2.2.0.2",
+  "setupWindowTitle": "BlackWot Pack Installer",
+  "installerIconPath": "/Users/amarkovic/Downloads/xcode-s-dark-96x96_2x.png",
+  "createZip": true,
+  "createInstallerExe": true
+}

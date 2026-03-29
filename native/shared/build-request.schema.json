@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blackwot.local/mod-builder-bw/build-request.schema.json",
+  "title": "Mod Builder BW Build Request",
+  "type": "object",
+  "required": [
+    "sources",
+    "outputDirectory",
+    "region",
+    "modsFolderName",
+    "versionFolder",
+    "createZip",
+    "createInstallerExe"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "outputDirectory": {
+      "type": "string",
+      "minLength": 1
+    },
+    "region": {
+      "type": "string",
+      "enum": ["EU", "NA", "RU", "CUSTOM", "NONE"]
+    },
+    "gameRoot": {
+      "type": "string"
+    },
+    "modsFolderName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "versionFolder": {
+      "type": "string",
+      "minLength": 1
+    },
+    "installerName": {
+      "type": "string"
+    },
+    "setupWindowTitle": {
+      "type": "string"
+    },
+    "installerIconPath": {
+      "type": "string"
+    },
+    "createZip": {
+      "type": "boolean"
+    },
+    "createInstallerExe": {
+      "type": "boolean"
+    }
+  }
+}
