@@ -39,7 +39,7 @@ It helps mod creators collect multiple `.wotmod` files or folders, target a spec
 1. Open GitHub Desktop.
 2. `File` -> `Add Local Repository`.
 3. Select:
-   - `/Users/user/Desktop/Mod Builder/Bilder/Mod Billder`
+   - `/Users/amarkovic/Desktop/Mod Builder/Bilder/Mod Billder`
 4. Click `Publish repository`.
 5. Suggested repository name:
    - `ModBuilderBW`
