@@ -1,18 +1,36 @@
 # Mod Builder BW
 
-Cross-platform World of Tanks mod builder.
+![Mod Builder BW UI](docs/images/repo-preview.png)
 
-Project targets:
+Mod Builder BW is a cross-platform World of Tanks mod pack builder for macOS and Windows.
+
+It helps mod creators collect multiple `.wotmod` files or folders, target a specific game version, and export the final package as either a ZIP archive or a Windows EXE installer. The generated installer can auto-detect installed World of Tanks clients for EU, NA, RU, and generic installations, then let the player choose the correct destination before installing the mods.
+
+## What The Software Does
+
+- builds mod packs from multiple files or folders
+- supports drag and drop mod input
+- targets a specific `mods/<version>` folder structure
+- creates ZIP packages for distribution
+- creates Windows EXE installers for mod deployment
+- supports custom installer name, setup title, and icon
+- auto-detects installed World of Tanks clients on Windows
+- includes native app targets for macOS and Windows
+
+## Project Targets
+
 - `src/` : Java 21 version
 - `native/macos/` : native Swift macOS app
 - `native/windows/` : native .NET 10 WPF Windows app
 
-Branding assets:
+## Branding Assets
+
 - `branding/ModBuilderBW.png`
 - `branding/ModBuilderBW.ico`
 - `branding/ModBuilderBW.icns`
 
-Current release outputs built locally:
+## Current Release Outputs
+
 - macOS: `.app` and `.dmg`
 - Windows: native installer `.exe`
 
