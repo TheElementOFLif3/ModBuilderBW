@@ -140,7 +140,7 @@
                             <Image Source="{Binding InstallerIconPreview}" Stretch="Uniform" />
                         </Border>
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Installer EXE preview" Margin="0,0,12,12" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Mod-pack installer preview (.exe)" Margin="0,0,12,12" VerticalAlignment="Center" />
                         <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PreviewInstallerFileName}" FontFamily="Consolas" Margin="0,0,0,12" />
 
                         <TextBlock Grid.Row="4" Grid.Column="0" Text="Setup title preview" Margin="0,0,12,12" VerticalAlignment="Center" />
@@ -149,7 +149,7 @@
                         <TextBlock Grid.Row="5" Grid.Column="0" Text="Export" Margin="0,0,12,12" VerticalAlignment="Top" />
                         <StackPanel Grid.Row="5" Grid.Column="1" Margin="0,0,0,12">
                             <CheckBox Content="Create ZIP package" IsChecked="{Binding CreateZip}" Margin="0,0,0,8" />
-                            <CheckBox Content="Export Windows EXE installer" IsChecked="{Binding CreateInstallerExe}" />
+                            <CheckBox Content="Export Windows mod-pack installer (.exe)" IsChecked="{Binding CreateInstallerExe}" />
                         </StackPanel>
                     </Grid>
                 </GroupBox>

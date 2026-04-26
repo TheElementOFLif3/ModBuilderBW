@@ -212,7 +212,7 @@ struct ContentView: View {
                             }
                         }
                         GridRow {
-                            Text("Installer EXE preview")
+                            Text("Mod-pack installer preview (.exe)")
                             Text(viewModel.previewInstallerFileName)
                                 .font(.system(.body, design: .monospaced))
                                 .textSelection(.enabled)
@@ -226,7 +226,7 @@ struct ContentView: View {
                             Text("Export")
                             VStack(alignment: .leading, spacing: 8) {
                                 Toggle("Create ZIP package", isOn: $viewModel.createZip)
-                                Toggle("Export Windows EXE installer", isOn: $viewModel.createInstallerExe)
+                                Toggle("Export Windows mod-pack installer (.exe)", isOn: $viewModel.createInstallerExe)
                             }
                         }
                     }
