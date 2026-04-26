@@ -82,6 +82,7 @@ if [[ -f "$ICON_SOURCE" ]]; then
 fi
 
 xattr -cr "$APP_DIR" || true
+chflags -R nohidden "$APP_DIR" || true
 if [[ "$SIGN_IDENTITY" == "-" ]]; then
   codesign --force --deep --sign - --timestamp=none "$APP_DIR" >/dev/null
 else
@@ -91,6 +92,8 @@ fi
 mkdir -p "$STAGE_DIR"
 cp -R "$APP_DIR" "$STAGE_DIR/"
 ln -s /Applications "$STAGE_DIR/Applications"
+chflags -R nohidden "$STAGE_DIR" || true
+xattr -cr "$STAGE_DIR" || true
 rm -f "$DMG_PATH"
 hdiutil create -volname "$PROJECT_NAME" -srcfolder "$STAGE_DIR" -ov -format UDZO "$DMG_PATH" >/dev/null
 rm -rf "$STAGE_DIR" "$ICONSET_DIR"
