@@ -386,6 +386,7 @@ def build_wix_project(project_file: Path, wix_source: Path) -> None:
             <TargetName>{Path(INSTALLER_NAME).stem}</TargetName>
             <InstallerPlatform>x64</InstallerPlatform>
             <SuppressValidation>true</SuppressValidation>
+            <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
           </PropertyGroup>
           <ItemGroup>
             <Compile Include="{wix_source.name}" />

@@ -29,6 +29,7 @@ final class BuildRequestViewModel: ObservableObject {
 
     init() {
         self.outputDirectory = (try? ModBuilderService().ensureWorkspaceDir().path) ?? (NSHomeDirectory() + "/Desktop/Mod Builder")
+        self.installerIconPath = Self.defaultBundledInstallerIconPath() ?? ""
         loadSettings()
         configureBindings()
         refreshInstallerIconPreview()
@@ -227,6 +228,9 @@ final class BuildRequestViewModel: ObservableObject {
 
     private func loadSettings() {
         guard let data = settingsStore.load() else {
+            if installerIconPath.isEmpty {
+                installerIconPath = Self.defaultBundledInstallerIconPath() ?? ""
+            }
             return
         }
         sources = data.sources
@@ -240,6 +244,9 @@ final class BuildRequestViewModel: ObservableObject {
         installerIconPath = data.installerIconPath
         createZip = data.createZip
         createInstallerExe = data.createInstallerExe
+        if installerIconPath.isEmpty || !FileManager.default.fileExists(atPath: installerIconPath) {
+            installerIconPath = Self.defaultBundledInstallerIconPath() ?? installerIconPath
+        }
     }
 
     private func configureBindings() {
@@ -294,6 +301,10 @@ final class BuildRequestViewModel: ObservableObject {
             return
         }
         installerIconPreview = NSImage(contentsOf: URL(fileURLWithPath: path))
+    }
+
+    private static func defaultBundledInstallerIconPath() -> String? {
+        Bundle.module.url(forResource: "ModPackDefaultIcon", withExtension: "png")?.path
     }
 }
 

@@ -35,6 +35,7 @@ public sealed class BuildRequestViewModel : INotifyPropertyChanged
         _outputDirectory = _service.EnsureWorkspaceDir();
         Sources.CollectionChanged += SourcesOnCollectionChanged;
         LoadSettings();
+        ApplyBundledInstallerIconIfNeeded();
         RefreshIconPreview();
     }
 
@@ -309,6 +310,21 @@ public sealed class BuildRequestViewModel : INotifyPropertyChanged
         OnPropertyChanged(string.Empty);
     }
 
+    private void ApplyBundledInstallerIconIfNeeded()
+    {
+        var bundledIconPath = GetBundledInstallerIconPath();
+        if (string.IsNullOrWhiteSpace(bundledIconPath))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_installerIconPath) || !File.Exists(_installerIconPath))
+        {
+            _installerIconPath = bundledIconPath;
+            OnPropertyChanged(nameof(InstallerIconPath));
+        }
+    }
+
     private void SaveSettings()
     {
         _settingsStore.Save(new PersistedSettings
@@ -358,6 +374,12 @@ public sealed class BuildRequestViewModel : INotifyPropertyChanged
         }
 
         SaveSettings();
+    }
+
+    private static string? GetBundledInstallerIconPath()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "ModPackDefaultIcon.png");
+        return File.Exists(path) ? path : null;
     }
 
     private static BitmapSource RenderSquarePreview(BitmapSource source, int size)
