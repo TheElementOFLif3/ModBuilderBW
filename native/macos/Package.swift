@@ -12,10 +12,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "ModBuilderBWMac",
-            path: "Sources/ModBuilderBWMac",
-            resources: [
-                .process("Resources")
-            ]
+            path: "Sources/ModBuilderBWMac"
         )
     ]
 )

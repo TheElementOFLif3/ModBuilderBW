@@ -11,10 +11,4 @@
     <RootNamespace>ModBuilderBW.Windows</RootNamespace>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Content Include="Assets\ModPackDefaultIcon.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
-  </ItemGroup>
 </Project>

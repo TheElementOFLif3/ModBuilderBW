@@ -312,15 +312,9 @@ public sealed class BuildRequestViewModel : INotifyPropertyChanged
 
     private void ApplyBundledInstallerIconIfNeeded()
     {
-        var bundledIconPath = GetBundledInstallerIconPath();
-        if (string.IsNullOrWhiteSpace(bundledIconPath))
+        if (!string.IsNullOrWhiteSpace(_installerIconPath) && !File.Exists(_installerIconPath))
         {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_installerIconPath) || !File.Exists(_installerIconPath))
-        {
-            _installerIconPath = bundledIconPath;
+            _installerIconPath = string.Empty;
             OnPropertyChanged(nameof(InstallerIconPath));
         }
     }
@@ -374,12 +368,6 @@ public sealed class BuildRequestViewModel : INotifyPropertyChanged
         }
 
         SaveSettings();
-    }
-
-    private static string? GetBundledInstallerIconPath()
-    {
-        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "ModPackDefaultIcon.png");
-        return File.Exists(path) ? path : null;
     }
 
     private static BitmapSource RenderSquarePreview(BitmapSource source, int size)
