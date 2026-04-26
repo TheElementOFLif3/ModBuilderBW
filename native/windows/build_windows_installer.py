@@ -3,25 +3,30 @@ from __future__ import annotations
 
 import argparse
 import os
+import platform
 import shutil
 import struct
 import subprocess
 import tempfile
+import textwrap
+import uuid
 import zipfile
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 
 APP_NAME = "Mod Builder BW"
 APP_EXE_NAME = "ModBuilderBW.Windows.exe"
-INSTALLER_NAME = "ModBuilderBW-Windows-Native-Installer.exe"
+INSTALLER_NAME = "ModBuilderBW-Windows-Installer.msi"
 APP_VERSION = "1.0.0"
 PUBLISH_FOLDER_NAME = "ModBuilderBW-Windows-App"
 APP_AUTHOR = "Blackwot"
 APP_LICENSE_LABEL = "Free to use"
-DOCKER_NSIS_IMAGE = "ubuntu:24.04"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ICON = PROJECT_ROOT / "branding" / "ModBuilderBW.png"
 NSIS_PORTABLE_WIN_ZIP_URL = "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.10/nsis-3.10.zip"
-IS_WINDOWS = os.name == "nt"
+WIX_SDK_VERSION = "7.0.0"
+UPGRADE_CODE = "{9F0A95F3-0E43-43D6-89D2-1B54DF59CFD7}"
+COMPANY_REGISTRY_KEY = r"Software\Blackwot\ModBuilderBW"
 
 
 def run(cmd: list[str], cwd: Path | None = None, capture: bool = False) -> str:
@@ -39,19 +44,6 @@ def run(cmd: list[str], cwd: Path | None = None, capture: bool = False) -> str:
 def ensure_tool(tool: str, install_hint: str) -> None:
     if shutil.which(tool) is None:
         raise RuntimeError(f"Missing required tool: {tool}. {install_hint}")
-
-
-def ensure_docker_ready() -> None:
-    ensure_tool("docker", "Install Docker Desktop or OrbStack and keep daemon running.")
-    try:
-        subprocess.run(
-            ["docker", "info"],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception as exc:
-        raise RuntimeError("Docker daemon is not running. Start Docker/OrbStack and retry.") from exc
 
 
 def curl_download(url: str, dest: Path) -> None:
@@ -225,13 +217,7 @@ def build_native_windows_publish(project_dir: Path, publish_dir: Path, app_icon_
         shutil.rmtree(publish_dir)
     publish_dir.mkdir(parents=True, exist_ok=True)
 
-    run([
-        "dotnet",
-        "restore",
-        "-r",
-        "win-x64",
-    ], cwd=project_dir)
-
+    run(["dotnet", "restore", "-r", "win-x64"], cwd=project_dir)
     run(
         [
             "dotnet",
@@ -266,7 +252,7 @@ def build_native_windows_publish(project_dir: Path, publish_dir: Path, app_icon_
         f"Author: {APP_AUTHOR}\r\n"
         f"License: {APP_LICENSE_LABEL}\r\n"
         "\r\n"
-        "Installed under Program Files.\r\n"
+        "Installed under Program Files via MSI.\r\n"
         "Bundled NSIS is included under tools\\nsis for mod-pack EXE exports.\r\n"
         "Use Start Menu shortcut or desktop shortcut to run the app.\r\n",
         encoding="utf-8",
@@ -284,118 +270,170 @@ def cleanup_stale_outputs(out_dir: Path) -> None:
                 entry.unlink()
 
 
-def build_nsis_installer(out_dir: Path, package_dir: Path, installer_icon_ico: Path) -> Path:
-    with tempfile.TemporaryDirectory(prefix="modbuilder_bw_native_nsis_") as tmp_name:
-        tmp_dir = Path(tmp_name)
-        work_package = tmp_dir / "package"
-        shutil.copytree(package_dir, work_package, dirs_exist_ok=True)
-        shutil.copy2(installer_icon_ico, tmp_dir / "installer_icon.ico")
+def sanitize_id(prefix: str, relative_path: str) -> str:
+    cleaned = []
+    for char in relative_path:
+        if char.isalnum():
+            cleaned.append(char)
+        else:
+            cleaned.append("_")
+    identifier = prefix + "_" + "".join(cleaned)
+    if identifier[0].isdigit():
+        identifier = "_" + identifier
+    return identifier[:70]
 
-        nsi_path = tmp_dir / "installer.nsi"
-        nsi_path.write_text(
-            '!include "MUI2.nsh"\n'
-            '!define APP_NAME "Mod Builder BW"\n'
-            '!define APP_VERSION "1.0.0"\n'
-            '!define APP_PUBLISHER "Blackwot"\n'
-            '!define APP_EXE "ModBuilderBW.Windows.exe"\n'
-            '!define INSTALL_DIR "$PROGRAMFILES64\\Mod Builder BW"\n'
-            '!define UNINST_KEY "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Mod Builder BW"\n'
-            '!define APP_KEY "Software\\Mod Builder BW"\n'
-            '!define MUI_ICON "installer_icon.ico"\n'
-            '!define MUI_UNICON "installer_icon.ico"\n'
-            'Icon "installer_icon.ico"\n'
-            'UninstallIcon "installer_icon.ico"\n'
-            'Name "${APP_NAME}"\n'
-            f'OutFile "/out/{INSTALLER_NAME}"\n'
-            'InstallDir "${INSTALL_DIR}"\n'
-            'InstallDirRegKey HKLM "${APP_KEY}" "InstallDir"\n'
-            'ManifestDPIAware true\n'
-            'RequestExecutionLevel admin\nCRCCheck off\n'
-            'BrandingText "Blackwot | Free to use"\n'
-            'ShowInstDetails show\n'
-            'ShowUninstDetails show\n'
-            '!define MUI_ABORTWARNING\n'
-            '!insertmacro MUI_PAGE_WELCOME\n'
-            '!insertmacro MUI_PAGE_DIRECTORY\n'
-            '!insertmacro MUI_PAGE_INSTFILES\n'
-            '!insertmacro MUI_PAGE_FINISH\n'
-            '!insertmacro MUI_UNPAGE_CONFIRM\n'
-            '!insertmacro MUI_UNPAGE_INSTFILES\n'
-            '!insertmacro MUI_LANGUAGE "English"\n'
-            'Section "Install"\n'
-            '  SetShellVarContext all\n'
-            '  SetOutPath "$INSTDIR"\n'
-            '  File /r "package\\*"\n'
-            '  WriteRegStr HKLM "${APP_KEY}" "InstallDir" "$INSTDIR"\n'
-            '  WriteRegStr HKLM "${UNINST_KEY}" "DisplayName" "${APP_NAME}"\n'
-            '  WriteRegStr HKLM "${UNINST_KEY}" "DisplayVersion" "${APP_VERSION}"\n'
-            '  WriteRegStr HKLM "${UNINST_KEY}" "Publisher" "${APP_PUBLISHER}"\n'
-            '  WriteRegStr HKLM "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\\app_icon.ico"\n'
-            '  WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"\n'
-            '  WriteRegStr HKLM "${UNINST_KEY}" "UninstallString" "$INSTDIR\\Uninstall.exe"\n'
-            '  WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1\n'
-            '  WriteRegDWORD HKLM "${UNINST_KEY}" "NoRepair" 1\n'
-            '  CreateDirectory "$SMPROGRAMS\\Mod Builder BW"\n'
-            '  CreateShortCut "$SMPROGRAMS\\Mod Builder BW\\Mod Builder BW.lnk" "$INSTDIR\\${APP_EXE}" "" "$INSTDIR\\app_icon.ico" 0\n'
-            '  CreateShortCut "$SMPROGRAMS\\Mod Builder BW\\Uninstall Mod Builder BW.lnk" "$INSTDIR\\Uninstall.exe" "" "$INSTDIR\\app_icon.ico" 0\n'
-            '  CreateShortCut "$DESKTOP\\Mod Builder BW.lnk" "$INSTDIR\\${APP_EXE}" "" "$INSTDIR\\app_icon.ico" 0\n'
-            '  WriteUninstaller "$INSTDIR\\Uninstall.exe"\n'
-            '  System::Call \'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)\'\n'
-            'SectionEnd\n'
-            'Section "Uninstall"\n'
-            '  SetShellVarContext all\n'
-            '  Delete "$DESKTOP\\Mod Builder BW.lnk"\n'
-            '  Delete "$SMPROGRAMS\\Mod Builder BW\\Mod Builder BW.lnk"\n'
-            '  Delete "$SMPROGRAMS\\Mod Builder BW\\Uninstall Mod Builder BW.lnk"\n'
-            '  RMDir "$SMPROGRAMS\\Mod Builder BW"\n'
-            '  Delete "$INSTDIR\\README_FIRST.txt"\n'
-            '  System::Call \'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)\'\n'
-            '  Delete "$INSTDIR\\app_icon.ico"\n'
-            '  Delete "$INSTDIR\\${APP_EXE}"\n'
-            '  Delete "$INSTDIR\\Uninstall.exe"\n'
-            '  RMDir /r "$INSTDIR"\n'
-            '  DeleteRegKey HKLM "${UNINST_KEY}"\n'
-            '  DeleteRegKey HKLM "${APP_KEY}"\n'
-            'SectionEnd\n',
-            encoding="utf-8",
+
+def stable_guid(name: str) -> str:
+    return "{" + str(uuid.uuid5(uuid.UUID("6f9619ff-8b86-d011-b42d-00cf4fc964ff"), name)).upper() + "}"
+
+
+def wix_source_path(path: Path) -> str:
+    return xml_escape(str(path.resolve())).replace("\\", "\\\\")
+
+
+def build_directory_tree(package_dir: Path) -> tuple[str, str, str]:
+    component_xml: list[str] = []
+    component_refs: list[str] = []
+
+    def walk(current_dir: Path, relative_dir: Path) -> str:
+        blocks: list[str] = []
+        for child in sorted(current_dir.iterdir(), key=lambda p: (p.is_file(), p.name.lower())):
+            relative_child = relative_dir / child.name if relative_dir != Path(".") else Path(child.name)
+            if child.is_dir():
+                dir_id = sanitize_id("DIR", relative_child.as_posix())
+                nested = walk(child, relative_child)
+                blocks.append(f'<Directory Id="{dir_id}" Name="{xml_escape(child.name)}">{nested}</Directory>')
+                continue
+
+            component_id = sanitize_id("CMP", relative_child.as_posix())
+            file_id = sanitize_id("FILE", relative_child.as_posix())
+            component_refs.append(f'<ComponentRef Id="{component_id}" />')
+            source_attr = wix_source_path(child)
+            guid = stable_guid(relative_child.as_posix())
+
+            if child.name == APP_EXE_NAME:
+                component_xml.append(textwrap.dedent(f'''\
+                    <Component Id="{component_id}" Guid="{guid}">
+                      <File Id="{file_id}" Source="{source_attr}" KeyPath="yes" Checksum="yes">
+                        <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuDir" Name="{xml_escape(APP_NAME)}" WorkingDirectory="INSTALLFOLDER" Advertise="no" Icon="AppIcon" IconIndex="0" />
+                        <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="{xml_escape(APP_NAME)}" WorkingDirectory="INSTALLFOLDER" Advertise="no" Icon="AppIcon" IconIndex="0" />
+                      </File>
+                      <RegistryValue Root="HKLM" Key="{xml_escape(COMPANY_REGISTRY_KEY)}" Name="InstallDir" Type="string" Value="[INSTALLFOLDER]" />
+                      <RemoveFolder Id="ProgramMenuDirRemove" Directory="ProgramMenuDir" On="uninstall" />
+                    </Component>
+                '''))
+            else:
+                component_xml.append(textwrap.dedent(f'''\
+                    <Component Id="{component_id}" Guid="{guid}">
+                      <File Id="{file_id}" Source="{source_attr}" KeyPath="yes" />
+                    </Component>
+                '''))
+
+        return "".join(blocks)
+
+    directories_xml = walk(package_dir, Path("."))
+    return directories_xml, "\n".join(component_xml), "\n".join(component_refs)
+
+
+def build_wix_authoring(package_dir: Path, app_icon_ico: Path, wix_source: Path) -> None:
+    directories_xml, component_xml, component_refs = build_directory_tree(package_dir)
+    icon_source = wix_source_path(app_icon_ico)
+    wix_text = textwrap.dedent(f'''\
+        <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+          <Package
+              Name="{xml_escape(APP_NAME)}"
+              Manufacturer="{xml_escape(APP_AUTHOR)}"
+              Version="{APP_VERSION}"
+              UpgradeCode="{UPGRADE_CODE}"
+              Language="1033"
+              Scope="perMachine"
+              InstallerVersion="500"
+              Compressed="yes">
+            <SummaryInformation Description="{xml_escape(APP_NAME)}" Manufacturer="{xml_escape(APP_AUTHOR)}" />
+            <Icon Id="AppIcon" SourceFile="{icon_source}" />
+            <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+            <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+            <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+            <StandardDirectory Id="ProgramFiles64Folder">
+              <Directory Id="INSTALLFOLDER" Name="{xml_escape(APP_NAME)}">
+                {directories_xml}
+                {component_xml}
+              </Directory>
+            </StandardDirectory>
+
+            <StandardDirectory Id="ProgramMenuFolder">
+              <Directory Id="ProgramMenuDir" Name="{xml_escape(APP_NAME)}" />
+            </StandardDirectory>
+
+            <StandardDirectory Id="DesktopFolder" />
+
+            <Feature Id="MainFeature" Title="{xml_escape(APP_NAME)}" Level="1">
+              {component_refs}
+            </Feature>
+          </Package>
+        </Wix>
+    ''')
+    wix_source.write_text(wix_text, encoding="utf-8")
+
+
+def build_wix_project(project_file: Path, wix_source: Path) -> None:
+    project_text = textwrap.dedent(f'''\
+        <Project Sdk="WixToolset.Sdk/{WIX_SDK_VERSION}">
+          <PropertyGroup>
+            <AcceptEula>wix7</AcceptEula>
+            <OutputType>Package</OutputType>
+            <TargetName>{Path(INSTALLER_NAME).stem}</TargetName>
+            <InstallerPlatform>x64</InstallerPlatform>
+            <SuppressValidation>true</SuppressValidation>
+          </PropertyGroup>
+          <ItemGroup>
+            <Compile Include="{wix_source.name}" />
+          </ItemGroup>
+        </Project>
+    ''')
+    project_file.write_text(project_text, encoding="utf-8")
+
+
+def build_msi_installer(out_dir: Path, package_dir: Path, installer_icon_ico: Path) -> Path:
+    with tempfile.TemporaryDirectory(prefix="modbuilder_bw_msi_") as tmp_name:
+        tmp_dir = Path(tmp_name)
+        wix_source = tmp_dir / "installer.wxs"
+        wix_project = tmp_dir / "ModBuilderBW.Windows.wixproj"
+        build_wix_authoring(package_dir, installer_icon_ico, wix_source)
+        build_wix_project(wix_project, wix_source)
+
+        obj_dir = tmp_dir / "obj"
+        bin_dir = tmp_dir / "bin"
+        run(
+            [
+                "dotnet",
+                "build",
+                str(wix_project),
+                "-c",
+                "Release",
+                f"-p:BaseIntermediateOutputPath={obj_dir}{os.sep}",
+                f"-p:OutputPath={bin_dir}{os.sep}",
+            ],
+            cwd=tmp_dir,
         )
 
-        if IS_WINDOWS:
-            makensis = package_dir / "tools" / "nsis" / "makensis.exe"
-            if not makensis.exists():
-                raise RuntimeError(f"Bundled NSIS was not found: {makensis}")
-            run([str(makensis), str(nsi_path)], cwd=tmp_dir)
-        else:
-            ensure_docker_ready()
-            run(
-                [
-                    "docker",
-                    "run",
-                    "--rm",
-                    "-v",
-                    f"{tmp_dir}:/work",
-                    "-v",
-                    f"{out_dir}:/out",
-                    DOCKER_NSIS_IMAGE,
-                    "sh",
-                    "-lc",
-                    "apt-get update -qq && apt-get install -y -qq nsis >/dev/null && cd /work && makensis installer.nsi",
-                ]
-            )
+        candidates = sorted(bin_dir.rglob("*.msi"))
+        if not candidates:
+            raise RuntimeError("WiX build finished but no MSI was produced.")
 
-    installer_path = out_dir / INSTALLER_NAME
-    if not installer_path.exists():
-        raise RuntimeError(f"Windows installer was not produced: {installer_path}")
-    return installer_path
+        target = out_dir / INSTALLER_NAME
+        shutil.copy2(candidates[0], target)
+        return target
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Build native Windows installer for Mod Builder BW.")
+    parser = argparse.ArgumentParser(description="Build native Windows MSI installer for Mod Builder BW.")
     parser.add_argument(
         "--output",
         type=Path,
         default=Path.home() / "Desktop" / "Mod Builder" / "installer_outputs_windows_native",
-        help="Output folder for publish output and installer",
+        help="Output folder for publish output and MSI installer",
     )
     parser.add_argument(
         "--icon",
@@ -413,6 +451,11 @@ def main(argv: list[str] | None = None) -> int:
         raise RuntimeError(f"Project directory not found: {project_dir}")
     if not icon_source.is_file():
         raise RuntimeError(f"Icon file not found: {icon_source}")
+    if platform.system() != "Windows":
+        raise RuntimeError(
+            "Local MSI packaging is supported only on Windows because WiX packaging on macOS/Linux is not reliable. "
+            "From macOS, run native/windows/build_windows_msi_via_github.sh after pushing your changes."
+        )
 
     cleanup_stale_outputs(out_dir)
     publish_dir = out_dir / PUBLISH_FOLDER_NAME
@@ -427,9 +470,9 @@ def main(argv: list[str] | None = None) -> int:
         exe_path = build_native_windows_publish(project_dir, publish_dir, app_icon_ico)
         print(f"[Windows] App publish ready: {exe_path}")
 
-        print("[Windows] Building Program Files installer via Docker+NSIS...")
-        installer_path = build_nsis_installer(out_dir, publish_dir, app_icon_ico)
-        print(f"[Windows] Installer ready: {installer_path}")
+        print("[Windows] Building Program Files MSI via WiX...")
+        installer_path = build_msi_installer(out_dir, publish_dir, app_icon_ico)
+        print(f"[Windows] MSI installer ready: {installer_path}")
 
     print("Build complete:")
     print(f"- App folder: {publish_dir}")

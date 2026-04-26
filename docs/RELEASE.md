@@ -9,7 +9,7 @@
 5. Download signed artifacts from Actions.
 6. Verify:
    - macOS notarization status
-   - Windows Authenticode signature
+   - Windows Authenticode signature on the `.msi`
    - SmartScreen behavior on a clean Windows machine
 
 ## Apple Secrets

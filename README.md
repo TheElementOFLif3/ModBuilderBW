@@ -32,7 +32,14 @@ It helps mod creators collect multiple `.wotmod` files or folders, target a spec
 ## Current Release Outputs
 
 - macOS: `.app` and `.dmg`
-- Windows: native installer `.exe`
+- Windows: native installer `.msi`
+
+## Building The Windows MSI
+
+- On Windows: run `native/windows/build_windows_installer.py`
+- On macOS: push your branch, then run `native/windows/build_windows_msi_via_github.sh`
+
+The macOS helper triggers the GitHub Actions `Release` workflow on a Windows runner, waits for it to finish, and downloads the produced `ModBuilderBW-Windows-Installer.msi` back to your Mac.
 
 ## Publish To GitHub Desktop
 
@@ -55,7 +62,7 @@ The repository includes:
 
 What the workflow does:
 - builds macOS `.app` and `.dmg`
-- builds Windows native installer `.exe`
+- builds Windows native installer `.msi`
 - signs artifacts if certificate secrets are present
 - uploads build artifacts to GitHub Actions
 

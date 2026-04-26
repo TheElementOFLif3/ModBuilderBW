@@ -89,7 +89,7 @@ jobs:
         run: |
           ./scripts/release/sign_windows.ps1 -Files @(
             "$env:RUNNER_TEMP/windows-release/ModBuilderBW-Windows-App/ModBuilderBW.Windows.exe",
-            "$env:RUNNER_TEMP/windows-release/ModBuilderBW-Windows-Native-Installer.exe"
+            "$env:RUNNER_TEMP/windows-release/ModBuilderBW-Windows-Installer.msi"
           )
 
       - uses: actions/upload-artifact@v4
@@ -97,4 +97,4 @@ jobs:
           name: ModBuilderBW-Windows
           path: |
             ${{ runner.temp }}/windows-release/ModBuilderBW-Windows-App
-            ${{ runner.temp }}/windows-release/ModBuilderBW-Windows-Native-Installer.exe
+            ${{ runner.temp }}/windows-release/ModBuilderBW-Windows-Installer.msi
