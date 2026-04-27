@@ -17,7 +17,7 @@ from xml.sax.saxutils import escape as xml_escape
 APP_NAME = "Mod Builder BW"
 APP_EXE_NAME = "ModBuilderBW.Windows.exe"
 INSTALLER_NAME = "ModBuilderBW-Windows-Installer.msi"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 PUBLISH_FOLDER_NAME = "ModBuilderBW-Windows-App"
 APP_AUTHOR = "Blackwot"
 APP_LICENSE_LABEL = "Free to use"
