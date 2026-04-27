@@ -36,5 +36,5 @@ public sealed class BuildRequest
     public string SetupWindowTitle { get; set; } = string.Empty;
     public string InstallerIconPath { get; set; } = string.Empty;
     public bool CreateZip { get; set; }
-    public bool CreateInstallerExe { get; set; }
+    public bool CreateInstallerMsi { get; set; }
 }

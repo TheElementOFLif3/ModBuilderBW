@@ -15,7 +15,7 @@ final class BuildRequestViewModel: ObservableObject {
     @Published var setupWindowTitle: String = ""
     @Published var installerIconPath: String = ""
     @Published var createZip: Bool = true
-    @Published var createInstallerExe: Bool = true
+    @Published var createInstallerMsi: Bool = true
     @Published var logText: String = ""
     @Published var isBuilding: Bool = false
     @Published var errorMessage: String?
@@ -162,7 +162,7 @@ final class BuildRequestViewModel: ObservableObject {
             setupWindowTitle: setupWindowTitle,
             installerIconPath: installerIconPath,
             createZip: createZip,
-            createInstallerExe: createInstallerExe
+            createInstallerMsi: createInstallerMsi
         )
 
         guard !request.sources.isEmpty else {
@@ -239,7 +239,7 @@ final class BuildRequestViewModel: ObservableObject {
         setupWindowTitle = data.setupWindowTitle
         installerIconPath = data.installerIconPath
         createZip = data.createZip
-        createInstallerExe = data.createInstallerExe
+        createInstallerMsi = data.createInstallerMsi
         if let path = installerIconPath.nonEmpty, !FileManager.default.fileExists(atPath: path) {
             installerIconPath = ""
         }
@@ -257,7 +257,7 @@ final class BuildRequestViewModel: ObservableObject {
             $setupWindowTitle.map { _ in () }.eraseToAnyPublisher(),
             $installerIconPath.map { _ in () }.eraseToAnyPublisher(),
             $createZip.map { _ in () }.eraseToAnyPublisher(),
-            $createInstallerExe.map { _ in () }.eraseToAnyPublisher()
+            $createInstallerMsi.map { _ in () }.eraseToAnyPublisher()
         ]
 
         Publishers.MergeMany(saveTriggers)
@@ -287,7 +287,7 @@ final class BuildRequestViewModel: ObservableObject {
             setupWindowTitle: setupWindowTitle,
             installerIconPath: installerIconPath,
             createZip: createZip,
-            createInstallerExe: createInstallerExe
+            createInstallerMsi: createInstallerMsi
         ))
     }
 

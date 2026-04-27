@@ -41,7 +41,7 @@ final class ModBuilderService {
     func previewInstallerFileName(installerNameRaw: String, region: Region, versionRaw: String) -> String {
         let version = sanitizeSegment(versionRaw, fallback: "2.2.0.2")
         let fallback = "WoT_ModInstaller_\(region.installerToken)_\(safeToken(version))"
-        return sanitizeInstallerFileStem(installerNameRaw, fallback: fallback) + ".exe"
+        return sanitizeInstallerFileStem(installerNameRaw, fallback: fallback) + ".msi"
     }
 
     func previewSetupWindowTitle(setupWindowTitleRaw: String, region: Region, versionRaw: String) -> String {
@@ -121,31 +121,30 @@ final class ModBuilderService {
         }
 
         var installerURL: URL?
-        if request.createInstallerExe {
-            guard let installerDefaultPath else {
-                throw BuildServiceError("Set Game root / install folder before exporting Windows EXE installer.")
-            }
-            installerURL = try buildWindowsInstallerExe(
+        if request.createInstallerMsi {
+            let defaultInstallPath = installerDefaultPath
+                ?? joinPathForDisplay(root: defaultWindowsRoot(for: .CUSTOM), modsFolder: modsFolder, version: version)
+            installerURL = try buildWindowsInstallerMsi(
                 payloadDir: payloadDir,
                 outputDir: outputDir,
                 region: request.region.rawValue,
                 modsFolder: modsFolder,
                 version: version,
-                recommendedInstallPath: installerDefaultPath,
+                recommendedInstallPath: defaultInstallPath,
                 installerNameRaw: request.installerName,
                 setupWindowTitleRaw: request.setupWindowTitle,
                 installerIconPath: request.installerIconPath,
                 log: log
             )
             if let installerURL {
-                log("Windows EXE installer created: \(installerURL.path)")
+                log("Windows MSI installer created: \(installerURL.path)")
             }
         }
 
-        return BuildResult(buildFolder: buildFolder, zipPath: zipURL, installerExePath: installerURL, previewPath: previewPath, copiedItems: copiedItems)
+        return BuildResult(buildFolder: buildFolder, zipPath: zipURL, installerMsiPath: installerURL, previewPath: previewPath, copiedItems: copiedItems)
     }
 
-    private func buildWindowsInstallerExe(payloadDir: URL,
+    private func buildWindowsInstallerMsi(payloadDir: URL,
                                           outputDir: URL,
                                           region: String,
                                           modsFolder: String,
@@ -160,42 +159,105 @@ final class ModBuilderService {
         let installerName = sanitizeInstallerFileStem(installerNameRaw, fallback: "WoT_ModInstaller_\(region)_\(safeVersion)")
 
         guard !isWindows else {
-            throw BuildServiceError("Windows local NSIS build is not implemented in the macOS Swift app. Use Docker cross-build from macOS.")
+            throw BuildServiceError("Windows local MSI build is not implemented in the macOS Swift app. Use Docker cross-build from macOS.")
         }
 
         try assertDockerReady()
-        log("Building Windows EXE using Docker NSIS cross-build...")
 
-        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("mod_builder_nsis_\(UUID().uuidString)", isDirectory: true)
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("mod_builder_msi_\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         let workPayload = tempDir.appendingPathComponent("payload", isDirectory: true)
         try copyItem(at: payloadDir, to: workPayload)
 
-        let outFile = resolveUniqueURL(outputDir.appendingPathComponent(installerName).appendingPathExtension("exe"))
+        let innerExe = tempDir.appendingPathComponent("inner_installer").appendingPathExtension("exe")
         let iconTarget = tempDir.appendingPathComponent("installer_icon.ico")
         let includeInstallerIcon = try prepareInstallerIcon(sourcePath: installerIconPath, targetIcoPath: iconTarget)
-        let scriptPath = tempDir.appendingPathComponent("installer.nsi")
+        let nsisScriptPath = tempDir.appendingPathComponent("installer.nsi")
         try buildNsisScript(
             displayName: displayName,
-            outFilePath: "/out/\(outFile.lastPathComponent)",
+            outFilePath: "/work/\(innerExe.lastPathComponent)",
             recommendedInstallPath: recommendedInstallPath,
             autoDetectCandidates: buildAutoDetectCandidates(region: region, modsFolder: modsFolder, version: version),
             includeInstallerIcon: includeInstallerIcon,
-            writeTo: scriptPath
+            writeTo: nsisScriptPath
+        )
+
+        log("Building wrapped Windows MSI using Docker (NSIS payload + wixl wrapper)...")
+        try runCommand([
+            "docker", "run", "--rm",
+            "-v", "\(tempDir.path):/work",
+            "ubuntu:24.04",
+            "sh", "-lc",
+            "apt-get update -qq && apt-get install -y -qq nsis >/dev/null && cd /work && makensis installer.nsi"
+        ], workingDirectory: nil, log: log)
+
+        let msiOutput = resolveUniqueURL(outputDir.appendingPathComponent(installerName).appendingPathExtension("msi"))
+        let wrapperScriptPath = tempDir.appendingPathComponent("wrapper.wxs")
+        try buildWixlWrapperScript(
+            displayName: displayName,
+            productVersion: msiProductVersion(from: version),
+            upgradeCode: UUID().uuidString.uppercased(),
+            innerInstallerFileName: innerExe.lastPathComponent,
+            includeInstallerIcon: includeInstallerIcon,
+            writeTo: wrapperScriptPath
         )
 
         try runCommand([
             "docker", "run", "--rm",
             "-v", "\(tempDir.path):/work",
             "-v", "\(outputDir.path):/out",
-            "ubuntu:24.04",
+            "debian:bookworm",
             "sh", "-lc",
-            "apt-get update -qq && apt-get install -y -qq nsis >/dev/null && cd /work && makensis installer.nsi"
+            "apt-get update -qq >/dev/null && apt-get install -y -qq wixl >/dev/null && cd /work && wixl -o /out/\(msiOutput.lastPathComponent) wrapper.wxs"
         ], workingDirectory: nil, log: log)
 
-        return outFile
+        return msiOutput
+    }
+
+    private func buildWixlWrapperScript(displayName: String,
+                                        productVersion: String,
+                                        upgradeCode: String,
+                                        innerInstallerFileName: String,
+                                        includeInstallerIcon: Bool,
+                                        writeTo scriptPath: URL) throws {
+        let iconBlock = includeInstallerIcon
+            ? """
+              <Icon Id="InstallerIcon" SourceFile="installer_icon.ico" />
+              <Property Id="ARPPRODUCTICON" Value="InstallerIcon" />
+              """
+            : ""
+        let text = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+          <Product Id="*" Name="\(escapeWixString(displayName))" Language="1033" Version="\(productVersion)" Manufacturer="Blackwot" UpgradeCode="\(upgradeCode)">
+            <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" />
+            <MediaTemplate EmbedCab="yes" />
+            <Property Id="ARPSYSTEMCOMPONENT" Value="1" />
+            <Property Id="ARPNOMODIFY" Value="1" />
+            <Property Id="ARPNOREPAIR" Value="1" />
+            \(iconBlock)
+            <Directory Id="TARGETDIR" Name="SourceDir">
+              <Directory Id="TempFolder">
+                <Directory Id="INSTALLFOLDER" Name="MBWTemp">
+                  <Component Id="cmp_inner" Guid="\(UUID().uuidString.uppercased())">
+                    <File Id="fil_inner" Source="\(escapeWixString(innerInstallerFileName))" KeyPath="yes" />
+                  </Component>
+                </Directory>
+              </Directory>
+            </Directory>
+            <CustomAction Id="LaunchWrappedInstaller" FileKey="fil_inner" ExeCommand="" Execute="immediate" Return="check" Impersonate="yes" />
+            <InstallExecuteSequence>
+              <Custom Action="LaunchWrappedInstaller" After="InstallFiles">NOT REMOVE</Custom>
+            </InstallExecuteSequence>
+            <Feature Id="Complete" Title="\(escapeWixString(displayName))" Level="1">
+              <ComponentRef Id="cmp_inner" />
+            </Feature>
+          </Product>
+        </Wix>
+        """
+        try text.write(to: scriptPath, atomically: true, encoding: .utf8)
     }
 
     private func buildNsisScript(displayName: String,
@@ -498,7 +560,7 @@ final class ModBuilderService {
         Installer icon: \(request.installerIconPath)
         Recommended install path: \(previewPath)
         Source items copied: \(copiedItems)
-        Windows EXE export requested: \(request.createInstallerExe)
+        Windows MSI export requested: \(request.createInstallerMsi)
 
         Contents are built under: \(modsFolder)/\(version)
         """
@@ -756,7 +818,8 @@ final class ModBuilderService {
         guard var value = blankToNil(raw) else {
             return fallback
         }
-        if value.lowercased().hasSuffix(".exe") {
+        let lowercased = value.lowercased()
+        if lowercased.hasSuffix(".exe") || lowercased.hasSuffix(".msi") {
             value = String(value.dropLast(4)).trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return value.isEmpty ? fallback : value
@@ -766,7 +829,8 @@ final class ModBuilderService {
         guard var value = blankToNil(raw) else {
             return fallback
         }
-        if value.lowercased().hasSuffix(".exe") {
+        let lowercased = value.lowercased()
+        if lowercased.hasSuffix(".exe") || lowercased.hasSuffix(".msi") {
             value = String(value.dropLast(4)).trimmingCharacters(in: .whitespacesAndNewlines)
         }
         value = value.replacingOccurrences(of: #"[\\/:*?"<>|]+"#, with: "_", options: .regularExpression)
@@ -802,6 +866,24 @@ final class ModBuilderService {
         value
             .replacingOccurrences(of: "$", with: "$$")
             .replacingOccurrences(of: "\"", with: "$\\\"")
+    }
+
+    private func escapeWixString(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+    }
+
+    private func msiProductVersion(from rawVersion: String) -> String {
+        let numbers = rawVersion
+            .split(whereSeparator: { !$0.isNumber })
+            .compactMap { Int($0) }
+        let major = min(max(numbers.first ?? 1, 0), 255)
+        let minor = min(max(numbers.dropFirst().first ?? 0, 0), 255)
+        let build = min(max(numbers.dropFirst(2).first ?? 0, 0), 65_535)
+        return "\(major).\(minor).\(build)"
     }
 }
 

@@ -48,7 +48,7 @@ public sealed class ModBuilderService
     {
         var version = SanitizeSegment(versionRaw, "2.2.0.2");
         var fallback = $"WoT_ModInstaller_{region.InstallerToken()}_{SafeToken(version)}";
-        return SanitizeInstallerFileStem(installerNameRaw, fallback) + ".exe";
+        return SanitizeInstallerFileStem(installerNameRaw, fallback) + ".msi";
     }
 
     public string PreviewSetupWindowTitle(string setupWindowTitleRaw, Region region, string versionRaw)
@@ -179,29 +179,25 @@ public sealed class ModBuilderService
             log($"ZIP package created: {zipPath}");
         }
 
-        string? installerExePath = null;
-        if (request.CreateInstallerExe)
+        string? installerMsiPath = null;
+        if (request.CreateInstallerMsi)
         {
-            if (installerDefaultPath is null)
-            {
-                throw new InvalidOperationException("Set Game root / install folder before exporting Windows EXE installer.");
-            }
-
-            installerExePath = BuildWindowsInstallerExe(payloadDir, outputDir, request.Region.ToString(), modsFolder, version, installerDefaultPath, request.InstallerName, request.SetupWindowTitle, request.InstallerIconPath, log);
-            log($"Windows EXE installer created: {installerExePath}");
+            var defaultInstallPath = installerDefaultPath ?? JoinPathForDisplay(DefaultWindowsRoot(Region.CUSTOM), modsFolder, version);
+            installerMsiPath = BuildWindowsInstallerMsi(payloadDir, outputDir, request.Region.ToString(), modsFolder, version, defaultInstallPath, request.InstallerName, request.SetupWindowTitle, request.InstallerIconPath, log);
+            log($"Windows MSI installer created: {installerMsiPath}");
         }
 
         return new BuildResult
         {
             BuildFolder = buildFolder,
             ZipPath = zipPath,
-            InstallerExePath = installerExePath,
+            InstallerMsiPath = installerMsiPath,
             PreviewPath = previewPath,
             CopiedItems = copiedItems
         };
     }
 
-    private string BuildWindowsInstallerExe(string payloadDir,
+    private string BuildWindowsInstallerMsi(string payloadDir,
                                             string outputDir,
                                             string region,
                                             string modsFolder,
@@ -216,29 +212,111 @@ public sealed class ModBuilderService
         var displayName = NormalizeInstallerDisplayName(setupWindowTitleRaw, $"WoT Mod Installer {region} {version}");
         var installerName = SanitizeInstallerFileStem(installerNameRaw, $"WoT_ModInstaller_{region}_{safeVersion}");
 
+        var tempDir = Path.Combine(Path.GetTempPath(), "mod_builder_msi_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var payloadExePath = Path.Combine(tempDir, "inner_installer.exe");
+            var iconTarget = Path.Combine(tempDir, "installer_icon.ico");
+            var headerTarget = Path.Combine(tempDir, "installer_header.bmp");
+            var (includeIcon, includeHeaderImage) = PrepareInstallerAssets(installerIconPath, iconTarget, headerTarget);
+
+            BuildWindowsInstallerPayloadExe(payloadDir, payloadExePath, region, modsFolder, version, recommendedInstallPath, displayName, includeIcon, includeHeaderImage, log);
+
+            var outputMsiPath = ResolveUniquePath(Path.Combine(outputDir, installerName + ".msi"), isDirectory: false);
+            BuildWindowsInstallerWrapperMsi(payloadExePath, outputMsiPath, displayName, version, includeIcon ? iconTarget : null, log);
+            return outputMsiPath;
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tempDir, true);
+            }
+            catch
+            {
+                // Ignore cleanup failures.
+            }
+        }
+    }
+
+    private void BuildWindowsInstallerPayloadExe(string payloadDir,
+                                                 string outputExePath,
+                                                 string region,
+                                                 string modsFolder,
+                                                 string version,
+                                                 string recommendedInstallPath,
+                                                 string displayName,
+                                                 bool includeInstallerIcon,
+                                                 bool includeHeaderImage,
+                                                 Action<string> log)
+    {
         var makensis = ResolveMakensisCommand();
         if (string.IsNullOrWhiteSpace(makensis))
         {
             throw new InvalidOperationException("makensis (NSIS) not found on Windows. Install NSIS or bundle makensis with the app.");
         }
 
-        var tempDir = Path.Combine(Path.GetTempPath(), "mod_builder_nsis_" + Guid.NewGuid().ToString("N"));
+        var tempDir = Path.GetDirectoryName(outputExePath)!;
+        var workPayload = Path.Combine(tempDir, "payload");
+        CopyItem(payloadDir, workPayload);
+
+        var scriptPath = Path.Combine(tempDir, "installer.nsi");
+        File.WriteAllText(scriptPath, BuildNsisScriptText(displayName, outputExePath, recommendedInstallPath, BuildAutoDetectCandidates(region, modsFolder, version), includeInstallerIcon, includeHeaderImage), Encoding.UTF8);
+
+        log($"Building wrapped installer payload using local makensis: {makensis}");
+        RunCommand(makensis, [scriptPath], tempDir, log);
+    }
+
+    private void BuildWindowsInstallerWrapperMsi(string payloadExePath,
+                                                 string outputMsiPath,
+                                                 string displayName,
+                                                 string version,
+                                                 string? installerIconIcoPath,
+                                                 Action<string> log)
+    {
+        var dotnet = ResolveDotnetCommand();
+        if (string.IsNullOrWhiteSpace(dotnet))
+        {
+            throw new InvalidOperationException(".NET SDK not found on Windows. Install .NET 10 SDK or newer to export Windows MSI mod-pack installers.");
+        }
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "mod_builder_wix_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
         try
         {
-            var workPayload = Path.Combine(tempDir, "payload");
-            CopyItem(payloadDir, workPayload);
+            File.Copy(payloadExePath, Path.Combine(tempDir, "inner_installer.exe"), true);
+            if (!string.IsNullOrWhiteSpace(installerIconIcoPath))
+            {
+                File.Copy(installerIconIcoPath, Path.Combine(tempDir, "installer_icon.ico"), true);
+            }
 
-            var outFile = ResolveUniquePath(Path.Combine(outputDir, installerName + ".exe"), isDirectory: false);
-            var iconTarget = Path.Combine(tempDir, "installer_icon.ico");
-            var headerTarget = Path.Combine(tempDir, "installer_header.bmp");
-            var (includeIcon, includeHeaderImage) = PrepareInstallerAssets(installerIconPath, iconTarget, headerTarget);
-            var scriptPath = Path.Combine(tempDir, "installer.nsi");
-            File.WriteAllText(scriptPath, BuildNsisScriptText(displayName, outFile, recommendedInstallPath, BuildAutoDetectCandidates(region, modsFolder, version), includeIcon, includeHeaderImage), Encoding.UTF8);
+            var wixSourcePath = Path.Combine(tempDir, "wrapper.wxs");
+            var wixProjectPath = Path.Combine(tempDir, "wrapper.wixproj");
+            File.WriteAllText(wixSourcePath, BuildWixWrapperSourceText(displayName, MsiProductVersion(version), Guid.NewGuid().ToString().ToUpperInvariant(), !string.IsNullOrWhiteSpace(installerIconIcoPath)), Encoding.UTF8);
+            File.WriteAllText(wixProjectPath, BuildWixWrapperProjectText(!string.IsNullOrWhiteSpace(installerIconIcoPath)), Encoding.UTF8);
 
-            log($"Building Windows EXE using local makensis: {makensis}");
-            RunCommand(makensis, [scriptPath], tempDir, log);
-            return outFile;
+            var objDir = Path.Combine(tempDir, "obj");
+            var binDir = Path.Combine(tempDir, "bin");
+            log("Building Windows MSI wrapper using local WiX...");
+            RunCommand(dotnet, [
+                "build",
+                wixProjectPath,
+                "-c",
+                "Release",
+                $"-p:BaseIntermediateOutputPath={objDir}{Path.DirectorySeparatorChar}",
+                $"-p:OutputPath={binDir}{Path.DirectorySeparatorChar}"
+            ], tempDir, log);
+
+            var builtMsi = Directory.GetFiles(binDir, "*.msi", SearchOption.AllDirectories)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(builtMsi))
+            {
+                throw new InvalidOperationException("WiX build completed but no MSI was produced.");
+            }
+
+            File.Copy(builtMsi, outputMsiPath, true);
         }
         finally
         {
@@ -398,6 +476,76 @@ public sealed class ModBuilderService
         return ordered;
     }
 
+    private string BuildWixWrapperSourceText(string displayName, string productVersion, string upgradeCode, bool includeInstallerIcon)
+    {
+        var iconBlock = includeInstallerIcon
+            ? "    <Icon Id=\"AppIcon\" SourceFile=\"installer_icon.ico\" />\n    <Property Id=\"ARPPRODUCTICON\" Value=\"AppIcon\" />\n"
+            : string.Empty;
+        var componentGuid = StableGuid("WrappedInstallerComponent_" + upgradeCode);
+        var manufacturer = EscapeXml("Blackwot");
+
+        return
+            "<Wix xmlns=\"http://wixtoolset.org/schemas/v4/wxs\">\n" +
+            "  <Package\n" +
+            $"      Name=\"{EscapeXml(displayName)}\"\n" +
+            $"      Manufacturer=\"{manufacturer}\"\n" +
+            $"      Version=\"{productVersion}\"\n" +
+            $"      UpgradeCode=\"{{{upgradeCode}}}\"\n" +
+            "      Language=\"1033\"\n" +
+            "      Scope=\"perUser\"\n" +
+            "      InstallerVersion=\"500\"\n" +
+            "      Compressed=\"yes\">\n" +
+            $"    <SummaryInformation Description=\"{EscapeXml(displayName)}\" Manufacturer=\"{manufacturer}\" />\n" +
+            iconBlock +
+            "    <Property Id=\"ARPSYSTEMCOMPONENT\" Value=\"1\" />\n" +
+            "    <Property Id=\"ARPNOMODIFY\" Value=\"1\" />\n" +
+            "    <Property Id=\"ARPNOREPAIR\" Value=\"1\" />\n" +
+            "    <MediaTemplate EmbedCab=\"yes\" CompressionLevel=\"high\" />\n\n" +
+            "    <StandardDirectory Id=\"TempFolder\">\n" +
+            "      <Directory Id=\"INSTALLFOLDER\" Name=\"MBWTemp\">\n" +
+            $"        <Component Id=\"WrappedInstallerComponent\" Guid=\"{{{componentGuid}}}\">\n" +
+            "          <File Id=\"WrappedInstallerFile\" Source=\"inner_installer.exe\" KeyPath=\"yes\" />\n" +
+            "        </Component>\n" +
+            "      </Directory>\n" +
+            "    </StandardDirectory>\n\n" +
+            "    <CustomAction Id=\"LaunchWrappedInstaller\" FileRef=\"WrappedInstallerFile\" ExeCommand=\"\" Execute=\"immediate\" Return=\"check\" Impersonate=\"yes\" />\n\n" +
+            "    <InstallExecuteSequence>\n" +
+            "      <Custom Action=\"LaunchWrappedInstaller\" After=\"InstallFiles\" Condition=\"NOT REMOVE\" />\n" +
+            "    </InstallExecuteSequence>\n\n" +
+            $"    <Feature Id=\"MainFeature\" Title=\"{EscapeXml(displayName)}\" Level=\"1\">\n" +
+            "      <ComponentRef Id=\"WrappedInstallerComponent\" />\n" +
+            "    </Feature>\n" +
+            "  </Package>\n" +
+            "</Wix>\n";
+    }
+
+    private string BuildWixWrapperProjectText(bool includeInstallerIcon)
+    {
+        var itemGroup = includeInstallerIcon
+            ? """
+  <ItemGroup>
+    <None Include="installer_icon.ico" />
+  </ItemGroup>
+"""
+            : string.Empty;
+
+        return $"""
+<Project Sdk="WixToolset.Sdk/7.0.0">
+  <PropertyGroup>
+    <AcceptEula>wix7</AcceptEula>
+    <OutputType>Package</OutputType>
+    <TargetName>wrapped-mod-installer</TargetName>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <SuppressValidation>true</SuppressValidation>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="wrapper.wxs" />
+  </ItemGroup>
+{itemGroup}</Project>
+""";
+    }
+
     private string? ResolveMakensisCommand()
     {
         var baseDir = AppContext.BaseDirectory;
@@ -419,6 +567,26 @@ public sealed class ModBuilderService
         }
 
         return IsCommandAvailable("makensis", "/VERSION") ? "makensis" : null;
+    }
+
+    private string? ResolveDotnetCommand()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "dotnet", "dotnet.exe"),
+            @"C:\Program Files\dotnet\dotnet.exe",
+            @"C:\Program Files (x86)\dotnet\dotnet.exe"
+        };
+
+        foreach (var candidate in candidates)
+        {
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return IsCommandAvailable("dotnet", "--info") ? "dotnet" : null;
     }
 
     private (bool IncludeIcon, bool IncludeHeaderImage) PrepareInstallerAssets(string sourcePath, string targetIcoPath, string targetHeaderBmpPath)
@@ -716,7 +884,7 @@ Setup window title: {(string.IsNullOrWhiteSpace(request.SetupWindowTitle) ? "<de
 Installer icon: {request.InstallerIconPath}
 Recommended install path: {previewPath}
 Source items copied: {copiedItems}
-Windows EXE export requested: {request.CreateInstallerExe}
+        Windows MSI export requested: {request.CreateInstallerMsi}
 
 Contents are built under: {modsFolder}/{version}
 """;
@@ -813,7 +981,7 @@ Contents are built under: {modsFolder}/{version}
             return fallback;
         }
 
-        if (value.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        if (value.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || value.EndsWith(".msi", StringComparison.OrdinalIgnoreCase))
         {
             value = value[..^4].Trim();
         }
@@ -829,7 +997,7 @@ Contents are built under: {modsFolder}/{version}
             return fallback;
         }
 
-        if (value.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        if (value.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || value.EndsWith(".msi", StringComparison.OrdinalIgnoreCase))
         {
             value = value[..^4].Trim();
         }
@@ -868,6 +1036,35 @@ Contents are built under: {modsFolder}/{version}
     }
 
     private string EscapeNsisString(string value) => value.Replace("$", "$$").Replace("\"", "$\\\"");
+
+    private string EscapeXml(string value)
+        => value
+            .Replace("&", "&amp;", StringComparison.Ordinal)
+            .Replace("\"", "&quot;", StringComparison.Ordinal)
+            .Replace("<", "&lt;", StringComparison.Ordinal)
+            .Replace(">", "&gt;", StringComparison.Ordinal);
+
+    private string MsiProductVersion(string rawVersion)
+    {
+        var parts = Regex.Matches(rawVersion, @"\d+")
+            .Select(match => int.TryParse(match.Value, out var value) ? value : 0)
+            .ToList();
+        var major = Math.Clamp(parts.ElementAtOrDefault(0), 0, 255);
+        var minor = Math.Clamp(parts.ElementAtOrDefault(1), 0, 255);
+        var build = Math.Clamp(parts.ElementAtOrDefault(2), 0, 65_535);
+        return $"{major}.{minor}.{build}";
+    }
+
+    private string StableGuid(string name)
+    {
+        var bytes = Encoding.UTF8.GetBytes(name);
+        var hash = System.Security.Cryptography.MD5.HashData(bytes);
+        hash[6] = (byte)((hash[6] & 0x0F) | 0x30);
+        hash[8] = (byte)((hash[8] & 0x3F) | 0x80);
+        var guidBytes = new byte[16];
+        Array.Copy(hash, guidBytes, 16);
+        return new Guid(guidBytes).ToString().ToUpperInvariant();
+    }
 
     private string ResolveUniquePath(string path, bool isDirectory)
     {

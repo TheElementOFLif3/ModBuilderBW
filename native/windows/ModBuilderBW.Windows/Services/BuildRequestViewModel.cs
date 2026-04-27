@@ -24,7 +24,7 @@ public sealed class BuildRequestViewModel : INotifyPropertyChanged
     private string _setupWindowTitle = string.Empty;
     private string _installerIconPath = string.Empty;
     private bool _createZip = true;
-    private bool _createInstallerExe = true;
+    private bool _createInstallerMsi = true;
     private string _logText = string.Empty;
     private bool _isBuilding;
     private ImageSource? _installerIconPreview;
@@ -113,10 +113,10 @@ public sealed class BuildRequestViewModel : INotifyPropertyChanged
         set => SetField(ref _createZip, value, refreshPreview: false);
     }
 
-    public bool CreateInstallerExe
+    public bool CreateInstallerMsi
     {
-        get => _createInstallerExe;
-        set => SetField(ref _createInstallerExe, value, refreshPreview: false);
+        get => _createInstallerMsi;
+        set => SetField(ref _createInstallerMsi, value, refreshPreview: false);
     }
 
     public string LogText
@@ -239,7 +239,7 @@ public sealed class BuildRequestViewModel : INotifyPropertyChanged
             SetupWindowTitle = SetupWindowTitle,
             InstallerIconPath = InstallerIconPath,
             CreateZip = CreateZip,
-            CreateInstallerExe = CreateInstallerExe
+            CreateInstallerMsi = CreateInstallerMsi
         };
 
         if (request.Sources.Count == 0)
@@ -305,7 +305,7 @@ public sealed class BuildRequestViewModel : INotifyPropertyChanged
         _setupWindowTitle = settings.SetupWindowTitle;
         _installerIconPath = settings.InstallerIconPath;
         _createZip = settings.CreateZip;
-        _createInstallerExe = settings.CreateInstallerExe;
+        _createInstallerMsi = settings.CreateInstallerMsi;
 
         OnPropertyChanged(string.Empty);
     }
@@ -333,7 +333,7 @@ public sealed class BuildRequestViewModel : INotifyPropertyChanged
             SetupWindowTitle = SetupWindowTitle,
             InstallerIconPath = InstallerIconPath,
             CreateZip = CreateZip,
-            CreateInstallerExe = CreateInstallerExe
+            CreateInstallerMsi = CreateInstallerMsi
         });
     }
 

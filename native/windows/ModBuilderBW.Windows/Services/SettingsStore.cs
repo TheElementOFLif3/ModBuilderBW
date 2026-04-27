@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using ModBuilderBW.Windows.Models;
 
 namespace ModBuilderBW.Windows.Services;
@@ -16,7 +17,9 @@ public sealed class PersistedSettings
     public string SetupWindowTitle { get; set; } = string.Empty;
     public string InstallerIconPath { get; set; } = string.Empty;
     public bool CreateZip { get; set; } = true;
-    public bool CreateInstallerExe { get; set; } = true;
+    public bool CreateInstallerMsi { get; set; } = true;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? CreateInstallerExe { get; set; }
 }
 
 public sealed class SettingsStore
@@ -42,7 +45,24 @@ public sealed class SettingsStore
 
         try
         {
-            return JsonSerializer.Deserialize<PersistedSettings>(File.ReadAllText(_filePath), _jsonOptions);
+            var json = File.ReadAllText(_filePath);
+            var settings = JsonSerializer.Deserialize<PersistedSettings>(json, _jsonOptions);
+            if (settings is null)
+            {
+                return null;
+            }
+
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (!root.TryGetProperty(nameof(PersistedSettings.CreateInstallerMsi), out _) &&
+                root.TryGetProperty(nameof(PersistedSettings.CreateInstallerExe), out var legacyValue) &&
+                legacyValue.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                settings.CreateInstallerMsi = legacyValue.GetBoolean();
+            }
+
+            settings.CreateInstallerExe = null;
+            return settings;
         }
         catch
         {

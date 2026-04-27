@@ -212,7 +212,7 @@ struct ContentView: View {
                             }
                         }
                         GridRow {
-                            Text("Mod-pack installer preview (.exe)")
+                            Text("Mod-pack installer preview (.msi)")
                             Text(viewModel.previewInstallerFileName)
                                 .font(.system(.body, design: .monospaced))
                                 .textSelection(.enabled)
@@ -226,7 +226,7 @@ struct ContentView: View {
                             Text("Export")
                             VStack(alignment: .leading, spacing: 8) {
                                 Toggle("Create ZIP package", isOn: $viewModel.createZip)
-                                Toggle("Export Windows mod-pack installer (.exe)", isOn: $viewModel.createInstallerExe)
+                                Toggle("Export Windows mod-pack installer (.msi)", isOn: $viewModel.createInstallerMsi)
                             }
                         }
                     }
@@ -262,10 +262,10 @@ struct ContentView: View {
                                         .textSelection(.enabled)
                                 }
                             }
-                            if let exeURL = result.installerExePath {
+                            if let msiURL = result.installerMsiPath {
                                 GridRow {
-                                    Text("Last EXE")
-                                    Text(exeURL.path)
+                                    Text("Last MSI")
+                                    Text(msiURL.path)
                                         .font(.system(.body, design: .monospaced))
                                         .textSelection(.enabled)
                                 }

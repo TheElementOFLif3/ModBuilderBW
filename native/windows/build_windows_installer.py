@@ -253,7 +253,8 @@ def build_native_windows_publish(project_dir: Path, publish_dir: Path, app_icon_
         f"License: {APP_LICENSE_LABEL}\r\n"
         "\r\n"
         "Installed under Program Files via MSI.\r\n"
-        "Bundled NSIS is included under tools\\nsis for mod-pack EXE exports.\r\n"
+        "Bundled NSIS is included under tools\\nsis for wrapped mod-pack MSI exports.\r\n"
+        "Install .NET 10 SDK or newer on Windows to build the MSI wrapper locally.\r\n"
         "Use Start Menu shortcut or desktop shortcut to run the app.\r\n",
         encoding="utf-8",
     )

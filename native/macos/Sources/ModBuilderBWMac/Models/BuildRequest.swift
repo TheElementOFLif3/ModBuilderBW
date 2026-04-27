@@ -39,5 +39,5 @@ struct BuildRequest: Codable {
     var setupWindowTitle: String
     var installerIconPath: String
     var createZip: Bool
-    var createInstallerExe: Bool
+    var createInstallerMsi: Bool
 }
